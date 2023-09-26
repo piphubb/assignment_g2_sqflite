@@ -1,66 +1,59 @@
+import 'dart:io';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as path;
 
 class DatabaseHelper {
+  static final DatabaseHelper _instance = DatabaseHelper._internal();
+  factory DatabaseHelper() => _instance;
+
   static Database? _database;
-  final String tableName = 'images';
+
+  DatabaseHelper._internal();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      return _database!;
+    }
     _database = await initDatabase();
     return _database!;
   }
 
   Future<Database> initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final pathToDatabase = path.join(dbPath, 'your_database.db');
-
-    return await openDatabase(
-      pathToDatabase,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE $tableName (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            image_path TEXT
-          )
-        ''');
-      },
-    );
+    Directory documentsDirectory = await getApplicationDocumentsDirectory();
+    String path = join(documentsDirectory.path, 'your_database.db');
+    return await openDatabase(path, version: 1, onCreate: _createDb);
   }
 
-  Future<int> insertImage(String imagePath) async {
-    final db = await database;
-    return await db.insert(tableName, {'image_path': imagePath});
+  void _createDb(Database db, int newVersion) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS images (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        description TEXT,
+        path TEXT
+      )
+    ''');
   }
 
-  Future<void> deleteImage(int id) async {
+  Future<int> insertImage(String title, String description, String imagePath) async {
     final db = await database;
-    await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+    return await db.insert('images', {'title': title, 'description': description, 'path': imagePath});
   }
 
-  Future<void> updateImage(int id, String imagePath) async {
+  Future<List<Map<String, dynamic>>> getImages() async {
     final db = await database;
-    await db.update(tableName, {'image_path': imagePath},
+    return await db.query('images');
+  }
+
+  Future<int> updateImage(int id, String title, String description, String newPath) async {
+    final db = await database;
+    return await db.update('images', {'title': title, 'description': description, 'path': newPath},
         where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<Map<String, dynamic>>> getAllImages() async {
+  Future<int> deleteImage(int id) async {
     final db = await database;
-    return await db.query(tableName);
-  }
-
-  Future<Map<String, dynamic>> getImageById(int id) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      tableName,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isNotEmpty) {
-      return maps.first;
-    } else {
-      throw Exception('Image not found');
-    }
+    return await db.delete('images', where: 'id = ?', whereArgs: [id]);
   }
 }
